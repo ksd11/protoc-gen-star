@@ -1,0 +1,130 @@
+/*
+  tango_vertify_result_verify协议的定义
+ */
+syntax = "proto2";
+
+package example;
+option go_package = "github.com/lyft/protoc-gen-star/testdata/generated/protocol-validate";
+
+// 导入validate进行校验。
+import "validate/validate.proto";
+
+// 协议定义
+message Protocol {
+  required string name = 1;     // 协议名字
+  required string version = 2;  // 协议版本
+  required Data data = 3;    // 协议数据，限制不能为空
+}
+
+// 协议数据定义
+message Data {
+  optional string spid = 1 [(validate.rules).string.min_len = 10];   // 商户号
+  optional string purchaser_id = 2; // 微信openid（微信体系必传）
+  required string purchaser_uid = 3; // uid
+  required string purchaser_wallet_id = 4; // 钱包id
+  required string transaction_id = 5 [(validate.rules).string = {
+    pattern:   "^[0-9]{10}[0-9]{8}123$",
+  }]; // 发红包风控交易单号
+  required bool is_pass = 6; // 是否通过
+  required VertifyType verify_type = 7; // 验证类型
+  required ChannelId channel_id = 8;// 渠道
+  required string client_ip = 9; // 客户端ip
+  optional TgRiskInfo tg_riskinfo = 10; //小程序附带信息，整体进行国密加密
+  // required uint32 verify_scene = 11 [(validate.rules).uint32.gte = 5, (validate.rules).uint32.lt = 10]; // 验证场景值：绑卡、注销等
+  required uint32 verify_scene = 11 [(validate.rules).uint32.in = 1, (validate.rules).uint32.in = 2]; // 验证场景值：绑卡、注销等
+  required FaceInfo face_info = 12; // 人脸信息
+}
+
+// 验证类型
+enum VertifyType {
+  MESSAGE = 1; // 短信
+  FACE = 2; // 人脸
+}
+
+// 渠道
+enum ChannelId {
+  WECHAT = 1; // 微信
+  APP = 2; // 共建app
+}
+
+// 人脸信息
+message FaceInfo {
+  required string userId = 1; //用户id
+  required string ip = 2; // ip地址
+  required string did = 3; // DID
+  required bool checkSilenceLiveness = 4; // 是否进行静默活体检测
+  required bool checkColorLiveness = 5; // 是否进行炫彩活体检测
+  required bool checkInjection = 6; // 是否进行防注入检测
+  required bool checkColorLight = 7; // 是否进行炫彩光检测
+  required bool detectOcclusion = 8; // 是否检测遮挡
+  required bool detectMask = 9; // 是否检测口罩
+  required bool detectGender = 10; // 是否检测性别
+  required string silentLivenessMode = 11; //静默活体检测等级
+  required string colorLivenessMode = 12; //炫彩活体检测等级
+  required string injectionMode = 13; //防注入检测等级
+  required string colorLightMode = 14; // 炫彩打光检测登记
+  required string ruleCodes = 15; // 命中的风控规则编号
+  required string facePolicyLevel = 16; // 活体检测等级
+  required string colorLivenessResult = 17; // 炫彩活体检测结果
+  required string injectionResult = 18; // 防注入检测结果
+  required string occlusionResult = 19; // 遮挡检测结果
+  required string maskResult = 20; // 口罩检测结果
+  required string genderResult = 21; // 性别检测结果
+  required double faceQualityScore = 22; // 人脸质量分数
+  required string faceDetectOverallResult = 23; // 活体检测总结果
+  required string riskLevel = 24; // 人脸盾风险等级
+  required string riskDesc = 25; // 人脸盾风险描述
+  required string country = 26; // GPS国家
+  required string province = 27; // GPS省份
+  required string city = 28; // GPS城市
+  required string district = 29; // GPS县
+  required string cityCode = 30; // GPS城市编码
+  required double altitude = 31; // 海拔
+  required string deviceid = 32; // 设备指纹token
+  required string eid = 33; // 设备指纹eid
+  required string timeZone = 34; // 时区
+  required string deviceCountry = 35; // 设备国家
+  required string language = 36; // 语言
+  required string imei = 37; // 国际移动设备标识
+  required string serialno = 38; // 序列号
+  required string androidId = 39; // androidId
+  required string networkType = 40; // 网络类型
+  required string carrierName = 41; // 运营商名称
+  required string bssid = 42; // wifi mac
+  required string carrierMobileNetworkCode = 43; // 移动网络代码
+  required string carrierIsoCountryCode = 44; // 移动国家码
+  required string carrierModileCountryCode = 45; // 国家码（基站网络）
+  required string carrierLocationAreaCode = 46; // 地区区域码
+  required bool isProxy = 47; // 是否代理
+  required bool isVPN = 48; //是否使用VPN
+  required string platform = 49; // 系统类型
+  required string os = 50; // 系统类型
+  required string osVersion = 51; // 操作系统版本
+  required string pModel = 52; // 手机机型
+  required string pBrand = 53; // 手机品牌
+  required string imsi = 54; // imsi号
+  required string openUDID = 55; // ios 开源UDID
+  required string identifierForVendor = 56; // IOS idfv
+  required string fcuuid = 57; // fcuuid
+  required string macAddress = 58; // 手机mac地址
+  required string batteryLevel = 59; // 手机电池的电量级别
+  required string diskSpace = 60; // 手机内置的内存容量
+  required string appName = 61; // app名字
+  required string appVersion = 62; // app版本
+  required uint32 accountIdFacePolicyAlllAccountIdNumL30m = 63; // 用户30分钟内尝试进行人脸识别次数
+  required uint32 accountIdFacePolicyAllAccountIdNumL12h = 64; // 用户12小时内尝试进行人脸识别次数
+  required uint32 accountIdFacePolicyOrgFailAccountIdNumL6h = 65; // 用户6小时内人脸比对失败次数
+}
+
+// 小程序附带信息（整体进行国密加密）
+message TgRiskInfo {
+  required string brand = 1; // 设备品牌
+  required string model = 2; // 设备型号
+  required string version = 3; // 微信版本号
+  required string system = 4; // 操作系统及版本
+  required string platform = 5; // 客户端平台
+  required string language = 6; // 微信设置的语言
+  required string networkType = 7; // 网络类型
+  required string nickname = 8; // 昵称
+  required string cookie = 9; // 小程序cookie
+}

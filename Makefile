@@ -56,16 +56,28 @@ testdata/generated: protoc-gen-go bin/protoc-gen-example
 		files=`find $$subdir -maxdepth 1 -name "*.proto"`; \
 		[ ! -z "$$files" ] && \
 		protoc -I ./testdata/protos \
+			-I ~/go/pkg/mod/github.com/envoyproxy/protoc-gen-validate@v1.0.4 \
 			--go_out="$$GOPATH/src" \
 			$$files; \
 	done
 	# generate using our demo plugin, don't need to go directory at a time
 	set -e; for subdir in `find ./testdata/protos -mindepth 1 -maxdepth 1 -type d`; do \
 		protoc -I ./testdata/protos \
+			-I ~/go/pkg/mod/github.com/envoyproxy/protoc-gen-validate@v1.0.4 \
 			--plugin=protoc-gen-example=./bin/protoc-gen-example \
 			--example_out="paths=source_relative:./testdata/generated" \
 			`find $$subdir -name "*.proto"`; \
 	done
+
+testdata/validate: protoc-gen-go bin/protoc-gen-example
+	go install google.golang.org/protobuf/cmd/protoc-gen-go
+	rm -rf ./testdata/generated && mkdir -p ./testdata/generated
+	
+	protoc -I ./testdata/protos/protocol-validate \
+		-I ~/go/pkg/mod/github.com/envoyproxy/protoc-gen-validate@v1.0.4 \
+		--plugin=protoc-gen-example=./bin/protoc-gen-example \
+		--example_out="paths=source_relative:./testdata/generated" \
+		./testdata/protos/protocol-validate/*.proto
 
 testdata/fdset.bin:
 	@protoc -I ./testdata/protos \

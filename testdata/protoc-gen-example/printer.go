@@ -3,11 +3,15 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"bytes"
 
+	"github.com/envoyproxy/protoc-gen-validate/templates/shared"
+	"github.com/envoyproxy/protoc-gen-validate/validate"
 	pgs "github.com/lyft/protoc-gen-star/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 type PrinterModule struct {
@@ -107,8 +111,160 @@ func (v PrinterVisitor) VisitEnumValue(ev pgs.EnumValue) (pgs.Visitor, error) {
 	return nil, nil
 }
 
+func resolveRules(typ interface{ IsEmbed() bool }, rules *validate.FieldRules) (ruleType string, rule proto.Message, messageRule *validate.MessageRules, wrapped bool) {
+	switch r := rules.GetType().(type) {
+	case *validate.FieldRules_Float:
+		ruleType, rule, wrapped = "float", r.Float, typ.IsEmbed()
+	case *validate.FieldRules_Double:
+		ruleType, rule, wrapped = "double", r.Double, typ.IsEmbed()
+	case *validate.FieldRules_Int32:
+		ruleType, rule, wrapped = "int32", r.Int32, typ.IsEmbed()
+	case *validate.FieldRules_Int64:
+		ruleType, rule, wrapped = "int64", r.Int64, typ.IsEmbed()
+	case *validate.FieldRules_Uint32:
+		ruleType, rule, wrapped = "uint32", r.Uint32, typ.IsEmbed()
+	case *validate.FieldRules_Uint64:
+		ruleType, rule, wrapped = "uint64", r.Uint64, typ.IsEmbed()
+	case *validate.FieldRules_Sint32:
+		ruleType, rule, wrapped = "sint32", r.Sint32, false
+	case *validate.FieldRules_Sint64:
+		ruleType, rule, wrapped = "sint64", r.Sint64, false
+	case *validate.FieldRules_Fixed32:
+		ruleType, rule, wrapped = "fixed32", r.Fixed32, false
+	case *validate.FieldRules_Fixed64:
+		ruleType, rule, wrapped = "fixed64", r.Fixed64, false
+	case *validate.FieldRules_Sfixed32:
+		ruleType, rule, wrapped = "sfixed32", r.Sfixed32, false
+	case *validate.FieldRules_Sfixed64:
+		ruleType, rule, wrapped = "sfixed64", r.Sfixed64, false
+	case *validate.FieldRules_Bool:
+		ruleType, rule, wrapped = "bool", r.Bool, typ.IsEmbed()
+	case *validate.FieldRules_String_:
+		ruleType, rule, wrapped = "string", r.String_, typ.IsEmbed()
+	case *validate.FieldRules_Bytes:
+		ruleType, rule, wrapped = "bytes", r.Bytes, typ.IsEmbed()
+	case *validate.FieldRules_Enum:
+		ruleType, rule, wrapped = "enum", r.Enum, false
+	case *validate.FieldRules_Repeated:
+		ruleType, rule, wrapped = "repeated", r.Repeated, false
+	case *validate.FieldRules_Map:
+		ruleType, rule, wrapped = "map", r.Map, false
+	case *validate.FieldRules_Any:
+		ruleType, rule, wrapped = "any", r.Any, false
+	case *validate.FieldRules_Duration:
+		ruleType, rule, wrapped = "duration", r.Duration, false
+	case *validate.FieldRules_Timestamp:
+		ruleType, rule, wrapped = "timestamp", r.Timestamp, false
+	case nil:
+		if ft, ok := typ.(pgs.FieldType); ok && ft.IsRepeated() {
+			return "repeated", &validate.RepeatedRules{}, rules.Message, false
+		} else if ok && ft.IsMap() && ft.Element().IsEmbed() {
+			return "map", &validate.MapRules{}, rules.Message, false
+		} else if typ.IsEmbed() {
+			return "message", rules.GetMessage(), rules.GetMessage(), false
+		}
+		return "none", nil, nil, false
+	default:
+		ruleType, rule, wrapped = "error", nil, false
+	}
+
+	return ruleType, rule, rules.Message, wrapped
+}
+
+func parseRule(name string, f pgs.Field) (out shared.RuleContext, err error) {
+
+	var rules validate.FieldRules
+	if _, err = f.Extension(validate.E_Rules, &rules); err != nil {
+		return
+	}
+
+	var wrapped bool
+	if out.Typ, out.Rules, out.MessageRules, wrapped = resolveRules(f.Type(), &rules); wrapped {
+		out.WrapperTyp = out.Typ
+		out.Typ = "wrapper"
+	}
+
+	if out.Typ == "error" {
+		err = fmt.Errorf("unknown rule type (%T)", rules)
+	}
+
+	if out.Rules == nil {
+		return
+	}
+	// 只有复合类型或者具有验证条件的字段才会下来
+
+	fmt.Fprintln(os.Stderr, "----------------")
+	fmt.Fprintln(os.Stderr, "name:", name)
+
+	switch out.Typ {
+	// case "string":
+	// 	fmt.Fprintln(os.Stderr, "string:", out.Rules.GetConst())
+	case "uint32":
+		uint32Rules := out.Rules.(*validate.UInt32Rules)
+		if uint32Rules.IgnoreEmpty != nil {
+			fmt.Fprintln(os.Stderr, "uint32:", "ignore_empty")
+		}
+		if uint32Rules.Const != nil {
+			fmt.Fprintln(os.Stderr, "uint32: value = ", uint32Rules.GetConst())
+		}
+		if (uint32Rules.Lt != nil || uint32Rules.Lte != nil) && (uint32Rules.Gt != nil || uint32Rules.Gte != nil) {
+			left := "["
+			left_value := uint32Rules.GetGte()
+			if uint32Rules.Gt != nil {
+				left = "("
+				left_value = uint32Rules.GetGt()
+			}
+			right := "]"
+			right_value := uint32Rules.GetLte()
+			if uint32Rules.Lt != nil {
+				right = ")"
+				right_value = uint32Rules.GetLt()
+			}
+
+			fmt.Fprintln(os.Stderr, "uint32: range ", left, left_value, right_value, right)
+		} else {
+			if uint32Rules.Lt != nil {
+				fmt.Fprintln(os.Stderr, "uint32: value < ", uint32Rules.GetLt())
+			}
+			if uint32Rules.Lte != nil {
+				fmt.Fprintln(os.Stderr, "uint32: value <= ", uint32Rules.GetLte())
+			}
+			if uint32Rules.Gt != nil {
+				fmt.Fprintln(os.Stderr, "uint32: value > ", uint32Rules.GetGt())
+			}
+			if uint32Rules.Gte != nil {
+				fmt.Fprintln(os.Stderr, "uint32: value >= ", uint32Rules.GetGte())
+			}
+		}
+		if uint32Rules.In != nil {
+			fmt.Fprintln(os.Stderr, "uint32: value in ", uint32Rules.GetIn())
+		}
+		if uint32Rules.NotIn != nil {
+			fmt.Fprintln(os.Stderr, "uint32: value not in ", uint32Rules.GetNotIn())
+		}
+	}
+	return
+
+}
+
 func (v PrinterVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
-	v.writeLeaf(f.Name().String())
+
+	res := f.Name().String() + "\t"
+
+	// 检验字段是否存在
+	if f.Required() {
+		res += "required" + "\t"
+	} else {
+		res += "optional" + "\t"
+	}
+
+	// 字段类型
+	res += f.Type().ProtoType().String() + "\t"
+
+	// 验证信息
+	parseRule(f.Name().String(), f)
+
+	v.writeLeaf(res)
 	return nil, nil
 }
 

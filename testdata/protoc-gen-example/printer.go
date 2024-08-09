@@ -173,7 +173,7 @@ func resolveRules(typ interface{ IsEmbed() bool }, rules *validate.FieldRules) (
 	return ruleType, rule, rules.Message, wrapped
 }
 
-func parseNumber[T any](numberRules protoreflect.ProtoMessage) {
+func parseNumber[T uint32 | uint64 | int32 | int64 | float32 | float64](numberRules protoreflect.ProtoMessage) {
 	val := reflect.ValueOf(numberRules)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -181,14 +181,14 @@ func parseNumber[T any](numberRules protoreflect.ProtoMessage) {
 
 	var ok bool
 
-	ok, _ = GetFieldPointer[bool](val, "IgnoreEmpty")
+	ok, _ = GetBool(val, "IgnoreEmpty")
 	if ok {
 		fmt.Fprintln(os.Stderr, "ignore_empty")
 	}
 
 	ok, constVal := GetFieldPointer[T](val, "Const")
 	if ok {
-		fmt.Fprintln(os.Stderr, "const: value = ", constVal)
+		fmt.Fprintf(os.Stderr, "%v : const value = %v\n", val.Type(), constVal)
 	}
 
 	lt, ltVal := GetFieldPointer[T](val, "Lt")
@@ -210,29 +210,33 @@ func parseNumber[T any](numberRules protoreflect.ProtoMessage) {
 			right_value = ltVal
 		}
 
-		fmt.Fprintln(os.Stderr, "uint32: range ", left, left_value, right_value, right)
+		// if left_value < right_value {
+		// 	fmt.Fprintf(os.Stderr, ": range %v %v,%v %v", left, left_value, right_value, right)
+		// }
+
+		fmt.Fprintf(os.Stderr, "%v : range %v %v,%v %v\n", val.Type(), left, left_value, right_value, right)
 	} else {
 		if lt {
-			fmt.Fprintln(os.Stderr, "uint32: value < ", ltVal)
+			fmt.Fprintf(os.Stderr, "%v : value < %v\n", val.Type(), ltVal)
 		}
 		if lte {
-			fmt.Fprintln(os.Stderr, "uint32: value <= ", lteVal)
+			fmt.Fprintf(os.Stderr, "%v: value <= %v\n", val.Type(), lteVal)
 		}
 		if gt {
-			fmt.Fprintln(os.Stderr, "uint32: value > ", gtVal)
+			fmt.Fprintf(os.Stderr, "%v: value > %v\n", val.Type(), gtVal)
 		}
 		if gte {
-			fmt.Fprintln(os.Stderr, "uint32: value >= ", gteVal)
+			fmt.Fprintf(os.Stderr, "%v: value >= %v\n", val.Type(), gteVal)
 		}
 	}
 
 	ok, in := GetFieldArray[T](val, "In")
 	if ok {
-		fmt.Fprintln(os.Stderr, "uint32: value in ", in)
+		fmt.Fprintf(os.Stderr, "%v: value in %v\n", val.Type(), in)
 	}
 	ok, not_in := GetFieldArray[T](val, "NotIn")
 	if ok {
-		fmt.Fprintln(os.Stderr, "uint32: value not in ", not_in)
+		fmt.Fprintf(os.Stderr, "%v: value not in %v\n", val.Type(), not_in)
 	}
 }
 

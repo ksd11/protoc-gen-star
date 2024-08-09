@@ -77,7 +77,7 @@ testdata/validate: protoc-gen-go bin/protoc-gen-example
 		-I ~/go/pkg/mod/github.com/envoyproxy/protoc-gen-validate@v1.0.4 \
 		--plugin=protoc-gen-example=./bin/protoc-gen-example \
 		--example_out="paths=source_relative:./testdata/generated" \
-		./testdata/protos/protocol-validate/*.proto
+		./testdata/protos/protocol-validate/simple.proto
 
 testdata/fdset.bin:
 	@protoc -I ./testdata/protos \

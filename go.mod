@@ -1,6 +1,6 @@
 module github.com/lyft/protoc-gen-star/v2
 
-go 1.17
+go 1.18
 
 require (
 	github.com/spf13/afero v1.10.0

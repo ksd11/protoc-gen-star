@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 
 	"bytes"
@@ -12,6 +13,7 @@ import (
 	"github.com/envoyproxy/protoc-gen-validate/validate"
 	pgs "github.com/lyft/protoc-gen-star/v2"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type PrinterModule struct {
@@ -171,6 +173,69 @@ func resolveRules(typ interface{ IsEmbed() bool }, rules *validate.FieldRules) (
 	return ruleType, rule, rules.Message, wrapped
 }
 
+func parseNumber[T any](numberRules protoreflect.ProtoMessage) {
+	val := reflect.ValueOf(numberRules)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	var ok bool
+
+	ok, _ = GetFieldPointer[bool](val, "IgnoreEmpty")
+	if ok {
+		fmt.Fprintln(os.Stderr, "ignore_empty")
+	}
+
+	ok, constVal := GetFieldPointer[T](val, "Const")
+	if ok {
+		fmt.Fprintln(os.Stderr, "const: value = ", constVal)
+	}
+
+	lt, ltVal := GetFieldPointer[T](val, "Lt")
+	lte, lteVal := GetFieldPointer[T](val, "Lte")
+	gt, gtVal := GetFieldPointer[T](val, "Gt")
+	gte, gteVal := GetFieldPointer[T](val, "Gte")
+
+	if (lt || lte) && (gt || gte) {
+		left := "["
+		left_value := gteVal
+		if gt {
+			left = "("
+			left_value = gtVal
+		}
+		right := "]"
+		right_value := lteVal
+		if lt {
+			right = ")"
+			right_value = ltVal
+		}
+
+		fmt.Fprintln(os.Stderr, "uint32: range ", left, left_value, right_value, right)
+	} else {
+		if lt {
+			fmt.Fprintln(os.Stderr, "uint32: value < ", ltVal)
+		}
+		if lte {
+			fmt.Fprintln(os.Stderr, "uint32: value <= ", lteVal)
+		}
+		if gt {
+			fmt.Fprintln(os.Stderr, "uint32: value > ", gtVal)
+		}
+		if gte {
+			fmt.Fprintln(os.Stderr, "uint32: value >= ", gteVal)
+		}
+	}
+
+	ok, in := GetFieldArray[T](val, "In")
+	if ok {
+		fmt.Fprintln(os.Stderr, "uint32: value in ", in)
+	}
+	ok, not_in := GetFieldArray[T](val, "NotIn")
+	if ok {
+		fmt.Fprintln(os.Stderr, "uint32: value not in ", not_in)
+	}
+}
+
 func parseRule(name string, f pgs.Field) (out shared.RuleContext, err error) {
 
 	var rules validate.FieldRules
@@ -199,49 +264,20 @@ func parseRule(name string, f pgs.Field) (out shared.RuleContext, err error) {
 	switch out.Typ {
 	// case "string":
 	// 	fmt.Fprintln(os.Stderr, "string:", out.Rules.GetConst())
-	case "uint32":
-		uint32Rules := out.Rules.(*validate.UInt32Rules)
-		if uint32Rules.IgnoreEmpty != nil {
-			fmt.Fprintln(os.Stderr, "uint32:", "ignore_empty")
-		}
-		if uint32Rules.Const != nil {
-			fmt.Fprintln(os.Stderr, "uint32: value = ", uint32Rules.GetConst())
-		}
-		if (uint32Rules.Lt != nil || uint32Rules.Lte != nil) && (uint32Rules.Gt != nil || uint32Rules.Gte != nil) {
-			left := "["
-			left_value := uint32Rules.GetGte()
-			if uint32Rules.Gt != nil {
-				left = "("
-				left_value = uint32Rules.GetGt()
-			}
-			right := "]"
-			right_value := uint32Rules.GetLte()
-			if uint32Rules.Lt != nil {
-				right = ")"
-				right_value = uint32Rules.GetLt()
-			}
-
-			fmt.Fprintln(os.Stderr, "uint32: range ", left, left_value, right_value, right)
-		} else {
-			if uint32Rules.Lt != nil {
-				fmt.Fprintln(os.Stderr, "uint32: value < ", uint32Rules.GetLt())
-			}
-			if uint32Rules.Lte != nil {
-				fmt.Fprintln(os.Stderr, "uint32: value <= ", uint32Rules.GetLte())
-			}
-			if uint32Rules.Gt != nil {
-				fmt.Fprintln(os.Stderr, "uint32: value > ", uint32Rules.GetGt())
-			}
-			if uint32Rules.Gte != nil {
-				fmt.Fprintln(os.Stderr, "uint32: value >= ", uint32Rules.GetGte())
-			}
-		}
-		if uint32Rules.In != nil {
-			fmt.Fprintln(os.Stderr, "uint32: value in ", uint32Rules.GetIn())
-		}
-		if uint32Rules.NotIn != nil {
-			fmt.Fprintln(os.Stderr, "uint32: value not in ", uint32Rules.GetNotIn())
-		}
+	case "uint32", "fixed32":
+		parseNumber[uint32](out.Rules)
+	case "uint64", "fixed64":
+		parseNumber[uint64](out.Rules)
+	case "int32", "sint32", "sfixed32":
+		parseNumber[int32](out.Rules)
+	case "int64", "sint64", "sfixed64":
+		parseNumber[int64](out.Rules)
+	case "double":
+		parseNumber[float64](out.Rules)
+	case "float":
+		parseNumber[float32](out.Rules)
+	default:
+		fmt.Fprintln(os.Stderr, "unknown type")
 	}
 	return
 

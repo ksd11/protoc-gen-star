@@ -31,7 +31,8 @@ message Data {
   required string client_ip = 9; // 客户端ip
   optional TgRiskInfo tg_riskinfo = 10; //小程序附带信息，整体进行国密加密
   // required uint32 verify_scene = 11 [(validate.rules).uint32.gte = 5, (validate.rules).uint32.lt = 10]; // 验证场景值：绑卡、注销等
-  required uint32 verify_scene = 11 [(validate.rules).uint32.in = 1, (validate.rules).uint32.in = 2]; // 验证场景值：绑卡、注销等
+  // required uint32 verify_scene = 11 [(validate.rules).uint32.in = 1, (validate.rules).uint32.in = 2]; // 验证场景值：绑卡、注销等
+  required uint32 verify_scene = 11 [(validate.rules).uint32.const = 10]; // 验证场景值：绑卡、注销等
   required FaceInfo face_info = 12; // 人脸信息
 }
 

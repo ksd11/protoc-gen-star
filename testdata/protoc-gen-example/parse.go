@@ -109,6 +109,7 @@ func parseNumber[T uint32 | uint64 | int32 | int64 | float32 | float64](numberRu
 
 	ok, constVal := GetFieldPointer[T](val, "Const")
 	if ok {
+		rules = append(rules, NumberConst(constVal))
 		fmt.Fprintf(os.Stderr, "%v : const value = %v\n", val.Type(), constVal)
 	}
 
@@ -131,13 +132,13 @@ func parseNumber[T uint32 | uint64 | int32 | int64 | float32 | float64](numberRu
 			right_value = ltVal
 		}
 		if left == "(" && right == ")" {
-			rules = append(rules, NumberRange[T](left_value, right_value))
+			rules = append(rules, NumberRange(left_value, right_value))
 		} else if left == "(" && right == "]" {
-			rules = append(rules, NumberRangeR[T](left_value, right_value))
+			rules = append(rules, NumberRangeR(left_value, right_value))
 		} else if left == "[" && right == ")" {
-			rules = append(rules, NumberRangeL[T](left_value, right_value))
+			rules = append(rules, NumberRangeL(left_value, right_value))
 		} else {
-			rules = append(rules, NumberRangeLR[T](left_value, right_value))
+			rules = append(rules, NumberRangeLR(left_value, right_value))
 		}
 		// if left_value < right_value {
 		// 	fmt.Fprintf(os.Stderr, ": range %v %v,%v %v", left, left_value, right_value, right)
@@ -146,25 +147,31 @@ func parseNumber[T uint32 | uint64 | int32 | int64 | float32 | float64](numberRu
 		fmt.Fprintf(os.Stderr, "%v : range %v %v,%v %v\n", val.Type(), left, left_value, right_value, right)
 	} else {
 		if lt {
+			rules = append(rules, NumberLt(ltVal))
 			fmt.Fprintf(os.Stderr, "%v : value < %v\n", val.Type(), ltVal)
 		}
 		if lte {
+			rules = append(rules, NumberLte(lteVal))
 			fmt.Fprintf(os.Stderr, "%v: value <= %v\n", val.Type(), lteVal)
 		}
 		if gt {
+			rules = append(rules, NumberGt(gtVal))
 			fmt.Fprintf(os.Stderr, "%v: value > %v\n", val.Type(), gtVal)
 		}
 		if gte {
+			rules = append(rules, NumberGte(gteVal))
 			fmt.Fprintf(os.Stderr, "%v: value >= %v\n", val.Type(), gteVal)
 		}
 	}
 
 	ok, in := GetFieldArray[T](val, "In")
 	if ok {
+		rules = append(rules, NumberIn(in))
 		fmt.Fprintf(os.Stderr, "%v: value in %v\n", val.Type(), in)
 	}
 	ok, not_in := GetFieldArray[T](val, "NotIn")
 	if ok {
+		rules = append(rules, NumberNotIn(in))
 		fmt.Fprintf(os.Stderr, "%v: value not in %v\n", val.Type(), not_in)
 	}
 	return rules

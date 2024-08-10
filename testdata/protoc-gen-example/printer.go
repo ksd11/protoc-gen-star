@@ -111,8 +111,8 @@ func (v PrinterVisitor) VisitEnumValue(ev pgs.EnumValue) (pgs.Visitor, error) {
 
 // 对数值proto的简单测试
 func readJsonSimple() map[string]string {
-	jsonStr := `{"float_val": "12.3"
-				, "double_val": "2"
+	jsonStr := `{"float_val": "0.3"
+				, "double_val": "0.05"
 				, "int32_val": "3"
 				, "int64_val": "3"
 				, "uint32_val": "3"
@@ -141,6 +141,7 @@ func (v PrinterVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 			fmt.Fprintln(os.Stderr, m)
 		}
 	}
+	fmt.Fprintln(os.Stderr, "-------------")
 	v.writeLeaf(f.Name().String())
 	return nil, nil
 }

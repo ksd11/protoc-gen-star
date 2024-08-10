@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"bytes"
@@ -109,39 +107,14 @@ func (v PrinterVisitor) VisitEnumValue(ev pgs.EnumValue) (pgs.Visitor, error) {
 	return nil, nil
 }
 
-// 对数值proto的简单测试
-func readJsonSimple() map[string]string {
-	jsonStr := `{"float_val": "0.3"
-				, "double_val": "0.05"
-				, "int32_val": "3"
-				, "int64_val": ""
-				, "uint32_val": "5"
-				, "uint64_val": "3"
-				, "sint32_val": "3"
-				, "sint64_val": "3"
-				, "fixed32_val": "3"
-				, "fixed64_val": "3"
-				, "sfixed32_val": "3"
-				, "sfixed64_val": "3"}`
-	var result map[string]string
-	err := json.Unmarshal([]byte(jsonStr), &result)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return nil
-	}
-	return result
-}
-
 func (v PrinterVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 
-	isValidate, msg := ParseField(f, readJsonSimple())
-	if !isValidate {
-		fmt.Fprintln(os.Stderr, "name :", f.Name().String())
-		for _, m := range msg {
-			fmt.Fprintln(os.Stderr, m)
-		}
-	}
-	fmt.Fprintln(os.Stderr, "-------------")
+	// 对单个field进行校验
+	isValidate, msg := ParseField(f, ReadJsonData())
+
+	// 输出单个Field校验结果
+	OutputOneFieldValidateResult(f.Name().String(), isValidate, msg)
+
 	v.writeLeaf(f.Name().String())
 	return nil, nil
 }

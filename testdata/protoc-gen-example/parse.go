@@ -12,6 +12,44 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+var debug_is_required bool = false
+var debug_field_type string = ""
+var debug_field_name string = ""
+var debug_field_value string = ""
+var debug_ignore_empty bool = false
+var debug_rules map[string]interface{} = make(map[string]interface{})
+
+func debug() {
+	res := ""
+	if debug_is_required {
+		res += "required "
+	} else {
+		res += "optional "
+	}
+	res += debug_field_type + " " + debug_field_name
+	if debug_ignore_empty {
+		res += " = \"\" [ignore_empty]"
+		fmt.Fprintln(os.Stderr, res)
+		return
+	}
+
+	res += " = " + debug_field_value + "["
+	for k, v := range debug_rules {
+		res += k + "=" + fmt.Sprintf("%v", v) + ","
+	}
+	res += "]"
+	fmt.Fprintln(os.Stderr, res)
+}
+
+func debug_clear() {
+	debug_is_required = false
+	debug_field_type = ""
+	debug_field_name = ""
+	debug_field_value = ""
+	debug_ignore_empty = false
+	debug_rules = make(map[string]interface{})
+}
+
 /*
 *
 
@@ -21,14 +59,19 @@ import (
 	3. 字段是否符合校验规则
 */
 func ParseField(f pgs.Field, rawData map[string]string) (isValidate bool, msg []string) {
+	debug_clear() // for debug
+	debug_field_name = f.Name().String()
+
 	// 检验字段是否是必须的
 	isValidate, msg = checkRequired(f, rawData)
 	if !isValidate {
 		return
 	}
 
-	// 字段类型和验证信息
+	// 检验字段类型和校验信息
 	isValidate, msg = checkRule(f, rawData)
+
+	debug() // for debug
 	return
 }
 
@@ -36,6 +79,7 @@ func checkRequired(f pgs.Field, rawData map[string]string) (isValidate bool, msg
 	isValidate = true
 	msg = []string{}
 	if f.Required() {
+		debug_is_required = true // for debug
 		if _, ok := rawData[f.Name().String()]; !ok {
 			isValidate = false
 			msg = append(msg, fmt.Sprintf("字段 %s 是必须的", f.Name().String()))
@@ -53,13 +97,15 @@ func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []s
 		msg = append(msg, err.Error())
 		return
 	}
+	// for debug
+	debug_field_type = ruleContext.Typ
 
 	// ignore_empty
 	reflect_val := getValue(ruleContext.Rules)
-	fmt.Fprintln(os.Stderr, ruleContext.Typ)
-	ok, is_ignore_empty := GetBool(reflect_val, "IgnoreEmpty")
-	if ok && is_ignore_empty && rawData[f.Name().String()] == "" {
-		fmt.Fprintln(os.Stderr, "ignore_empty")
+	ok, ignore_empty := GetBool(reflect_val, "IgnoreEmpty")
+	if ok && ignore_empty && rawData[f.Name().String()] == "" {
+		ignore_empty = true
+		debug_ignore_empty = true // for debug
 		return
 	}
 
@@ -70,6 +116,7 @@ func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []s
 		msg = append(msg, err.Error())
 		return
 	}
+	debug_field_value = fmt.Sprintf("%v", rawData[f.Name().String()])
 
 	// validate
 	switch ruleContext.Typ {
@@ -117,7 +164,7 @@ func parseNumber[T Number](numberRules protoreflect.ProtoMessage) []RuleFunc[T] 
 	ok, constVal := GetFieldPointer[T](val, "Const")
 	if ok {
 		rules = append(rules, NumberConst(constVal))
-		fmt.Fprintf(os.Stderr, "%v : const value = %v\n", val.Type(), constVal)
+		debug_rules["const"] = constVal // for debug
 	}
 
 	lt, ltVal := GetFieldPointer[T](val, "Lt")
@@ -147,39 +194,35 @@ func parseNumber[T Number](numberRules protoreflect.ProtoMessage) []RuleFunc[T] 
 		} else {
 			rules = append(rules, NumberRangeLR(left_value, right_value))
 		}
-		// if left_value < right_value {
-		// 	fmt.Fprintf(os.Stderr, ": range %v %v,%v %v", left, left_value, right_value, right)
-		// }
-
-		fmt.Fprintf(os.Stderr, "%v : range %v %v,%v %v\n", val.Type(), left, left_value, right_value, right)
+		debug_rules["range"] = fmt.Sprintf("%v%v,%v%v", left, left_value, right_value, right) // for debug
 	} else {
 		if lt {
 			rules = append(rules, NumberLt(ltVal))
-			fmt.Fprintf(os.Stderr, "%v : value < %v\n", val.Type(), ltVal)
+			debug_rules["lt"] = ltVal // for debug
 		}
 		if lte {
 			rules = append(rules, NumberLte(lteVal))
-			fmt.Fprintf(os.Stderr, "%v: value <= %v\n", val.Type(), lteVal)
+			debug_rules["lte"] = lteVal // for debug
 		}
 		if gt {
 			rules = append(rules, NumberGt(gtVal))
-			fmt.Fprintf(os.Stderr, "%v: value > %v\n", val.Type(), gtVal)
+			debug_rules["gt"] = gtVal // for debug
 		}
 		if gte {
 			rules = append(rules, NumberGte(gteVal))
-			fmt.Fprintf(os.Stderr, "%v: value >= %v\n", val.Type(), gteVal)
+			debug_rules["gte"] = gteVal // for debug
 		}
 	}
 
 	ok, in := GetFieldArray[T](val, "In")
 	if ok {
 		rules = append(rules, NumberIn(in))
-		fmt.Fprintf(os.Stderr, "%v: value in %v\n", val.Type(), in)
+		debug_rules["in"] = in // for debug
 	}
 	ok, not_in := GetFieldArray[T](val, "NotIn")
 	if ok {
 		rules = append(rules, NumberNotIn(in))
-		fmt.Fprintf(os.Stderr, "%v: value not in %v\n", val.Type(), not_in)
+		debug_rules["not_in"] = not_in // for debug
 	}
 	return rules
 }

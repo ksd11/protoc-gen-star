@@ -54,7 +54,14 @@ func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []s
 		return
 	}
 
+	// ignore_empty
+	reflect_val := getValue(ruleContext.Rules)
 	fmt.Fprintln(os.Stderr, ruleContext.Typ)
+	ok, is_ignore_empty := GetBool(reflect_val, "IgnoreEmpty")
+	if ok && is_ignore_empty && rawData[f.Name().String()] == "" {
+		fmt.Fprintln(os.Stderr, "ignore_empty")
+		return
+	}
 
 	// 校验类型
 	value_any, err := TypeConvertFuncMap[ruleContext.Typ](rawData[f.Name().String()])
@@ -92,20 +99,20 @@ func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []s
 	return
 }
 
-// 返回一堆验证函数
-func parseNumber[T uint32 | uint64 | int32 | int64 | float32 | float64](numberRules protoreflect.ProtoMessage) []RuleFunc[T] {
+func getValue(numberRules protoreflect.ProtoMessage) reflect.Value {
 	val := reflect.ValueOf(numberRules)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
+	return val
+}
+
+// 返回一堆验证函数
+func parseNumber[T Number](numberRules protoreflect.ProtoMessage) []RuleFunc[T] {
+	val := getValue(numberRules)
 
 	var ok bool
 	var rules []RuleFunc[T]
-
-	ok, _ = GetBool(val, "IgnoreEmpty")
-	if ok {
-		fmt.Fprintln(os.Stderr, "ignore_empty")
-	}
 
 	ok, constVal := GetFieldPointer[T](val, "Const")
 	if ok {
@@ -188,53 +195,6 @@ func validateRules[T any](val T, rules []RuleFunc[T]) (check bool, msg []string)
 		}
 	}
 	return
-}
-
-func parseRule(name string, f pgs.Field) (out shared.RuleContext, err error) {
-
-	var rules validate.FieldRules
-	if _, err = f.Extension(validate.E_Rules, &rules); err != nil {
-		return
-	}
-
-	var wrapped bool
-	if out.Typ, out.Rules, out.MessageRules, wrapped = resolveRules(f.Type(), &rules); wrapped {
-		out.WrapperTyp = out.Typ
-		out.Typ = "wrapper"
-	}
-
-	if out.Typ == "error" {
-		err = fmt.Errorf("unknown rule type (%T)", rules)
-	}
-
-	if out.Rules == nil {
-		return
-	}
-	// 只有复合类型或者具有验证条件的字段才会下来
-
-	fmt.Fprintln(os.Stderr, "----------------")
-	fmt.Fprintln(os.Stderr, "name:", name)
-
-	switch out.Typ {
-	// case "string":
-	// 	fmt.Fprintln(os.Stderr, "string:", out.Rules.GetConst())
-	case "uint32", "fixed32":
-		parseNumber[uint32](out.Rules)
-	case "uint64", "fixed64":
-		parseNumber[uint64](out.Rules)
-	case "int32", "sint32", "sfixed32":
-		parseNumber[int32](out.Rules)
-	case "int64", "sint64", "sfixed64":
-		parseNumber[int64](out.Rules)
-	case "double":
-		parseNumber[float64](out.Rules)
-	case "float":
-		parseNumber[float32](out.Rules)
-	default:
-		fmt.Fprintln(os.Stderr, "unknown type")
-	}
-	return
-
 }
 
 func rulesContext(f pgs.Field) (out shared.RuleContext, err error) {

@@ -14,8 +14,8 @@ message Protocol {
   }];
   required float float_val = 2 [(validate.rules).float.gt = 1.3];
   required int32 int32_val = 3 [(validate.rules).int32.const = 10];
-//   required int64 int64_val = 4 [(validate.rules).int64.lt = 3];
-//   required uint32 uint32_val = 5 [(validate.rules).uint32.lte = 7];
+  required int64 int64_val = 4 [(validate.rules).int64.lt = 3, (validate.rules).int64.ignore_empty = true];
+  required uint32 uint32_val = 5 [(validate.rules).uint32.lte = 7];
 //   required uint64 uint64_val = 6 [(validate.rules).uint64.gt = 10];
 //   required sint32 sint32_val = 7 [(validate.rules).sint32.gte = 23];
 //   required sint64 sint64_val = 8 [(validate.rules).sint64.in = 2];

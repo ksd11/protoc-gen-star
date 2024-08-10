@@ -88,6 +88,18 @@ func checkRequired(f pgs.Field, rawData map[string]string) (isValidate bool, msg
 	return
 }
 
+/*
+*
+
+	处理数值类型的数据
+	1. 先获取Number的所有校验规则
+	2. 然后验证Number对应的value是否符合校验规则
+*/
+func handleNumber[T Number](value_any any, rules protoreflect.ProtoMessage) (isValidate bool, msg []string) {
+	parsedRules := parseNumber[T](rules)
+	return validateRules[T](value_any.(T), parsedRules)
+}
+
 func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []string) {
 	isValidate = true
 	msg = []string{}
@@ -121,23 +133,17 @@ func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []s
 	// validate
 	switch ruleContext.Typ {
 	case "uint32", "fixed32":
-		rules := parseNumber[uint32](ruleContext.Rules)
-		return validateRules[uint32](value_any.(uint32), rules)
+		return handleNumber[uint32](value_any, ruleContext.Rules)
 	case "uint64", "fixed64":
-		rules := parseNumber[uint64](ruleContext.Rules)
-		return validateRules[uint64](value_any.(uint64), rules)
+		return handleNumber[uint64](value_any, ruleContext.Rules)
 	case "int32", "sint32", "sfixed32":
-		rules := parseNumber[int32](ruleContext.Rules)
-		return validateRules[int32](value_any.(int32), rules)
+		return handleNumber[int32](value_any, ruleContext.Rules)
 	case "int64", "sint64", "sfixed64":
-		rules := parseNumber[int64](ruleContext.Rules)
-		return validateRules[int64](value_any.(int64), rules)
+		return handleNumber[int64](value_any, ruleContext.Rules)
 	case "double":
-		rules := parseNumber[float64](ruleContext.Rules)
-		return validateRules[float64](value_any.(float64), rules)
+		return handleNumber[float64](value_any, ruleContext.Rules)
 	case "float":
-		rules := parseNumber[float32](ruleContext.Rules)
-		return validateRules[float32](value_any.(float32), rules)
+		return handleNumber[float32](value_any, ruleContext.Rules)
 	default:
 		isValidate = false
 		msg = append(msg, fmt.Sprintf("不支持类型 %s", ruleContext.Typ))

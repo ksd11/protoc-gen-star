@@ -20,27 +20,19 @@ import (
 	2. 字段的类型是否一致
 	3. 字段是否符合校验规则
 */
-func ParseField(f pgs.Field, rawData map[string]interface{}) (isValidate bool, msg []string) {
+func ParseField(f pgs.Field, rawData map[string]string) (isValidate bool, msg []string) {
 	// 检验字段是否是必须的
 	isValidate, msg = checkRequired(f, rawData)
 	if !isValidate {
 		return
 	}
 
-	// 字段类型
-	// res += f.Type().ProtoType().String() + "\t"
-	isValidate, msg = checkType(f, rawData)
-	if !isValidate {
-		return
-	}
-
-	// 验证信息
-	// parseRule(f.Name().String(), f)
+	// 字段类型和验证信息
 	isValidate, msg = checkRule(f, rawData)
 	return
 }
 
-func checkRequired(f pgs.Field, rawData map[string]interface{}) (isValidate bool, msg []string) {
+func checkRequired(f pgs.Field, rawData map[string]string) (isValidate bool, msg []string) {
 	isValidate = true
 	msg = []string{}
 	if f.Required() {
@@ -52,82 +44,52 @@ func checkRequired(f pgs.Field, rawData map[string]interface{}) (isValidate bool
 	return
 }
 
-func checkType(f pgs.Field, rawData map[string]interface{}) (isValidate bool, msg []string) {
+func checkRule(f pgs.Field, rawData map[string]string) (isValidate bool, msg []string) {
 	isValidate = true
 	msg = []string{}
-	// try{
-	// 	rawData[f.Name().String()].(f.Type().ProtoType().String()
-	// }
-	return
-}
-
-func checkRule(f pgs.Field, rawData map[string]interface{}) (isValidate bool, msg []string) {
-	isValidate = true
-	msg = []string{}
-	// try{
-	// 	rawData[f.Name().String()].(f.Type().ProtoType().String()
-	// }
-	return
-}
-
-func resolveRules(typ interface{ IsEmbed() bool }, rules *validate.FieldRules) (ruleType string, rule proto.Message, messageRule *validate.MessageRules, wrapped bool) {
-	switch r := rules.GetType().(type) {
-	case *validate.FieldRules_Float:
-		ruleType, rule, wrapped = "float", r.Float, typ.IsEmbed()
-	case *validate.FieldRules_Double:
-		ruleType, rule, wrapped = "double", r.Double, typ.IsEmbed()
-	case *validate.FieldRules_Int32:
-		ruleType, rule, wrapped = "int32", r.Int32, typ.IsEmbed()
-	case *validate.FieldRules_Int64:
-		ruleType, rule, wrapped = "int64", r.Int64, typ.IsEmbed()
-	case *validate.FieldRules_Uint32:
-		ruleType, rule, wrapped = "uint32", r.Uint32, typ.IsEmbed()
-	case *validate.FieldRules_Uint64:
-		ruleType, rule, wrapped = "uint64", r.Uint64, typ.IsEmbed()
-	case *validate.FieldRules_Sint32:
-		ruleType, rule, wrapped = "sint32", r.Sint32, false
-	case *validate.FieldRules_Sint64:
-		ruleType, rule, wrapped = "sint64", r.Sint64, false
-	case *validate.FieldRules_Fixed32:
-		ruleType, rule, wrapped = "fixed32", r.Fixed32, false
-	case *validate.FieldRules_Fixed64:
-		ruleType, rule, wrapped = "fixed64", r.Fixed64, false
-	case *validate.FieldRules_Sfixed32:
-		ruleType, rule, wrapped = "sfixed32", r.Sfixed32, false
-	case *validate.FieldRules_Sfixed64:
-		ruleType, rule, wrapped = "sfixed64", r.Sfixed64, false
-	case *validate.FieldRules_Bool:
-		ruleType, rule, wrapped = "bool", r.Bool, typ.IsEmbed()
-	case *validate.FieldRules_String_:
-		ruleType, rule, wrapped = "string", r.String_, typ.IsEmbed()
-	case *validate.FieldRules_Bytes:
-		ruleType, rule, wrapped = "bytes", r.Bytes, typ.IsEmbed()
-	case *validate.FieldRules_Enum:
-		ruleType, rule, wrapped = "enum", r.Enum, false
-	case *validate.FieldRules_Repeated:
-		ruleType, rule, wrapped = "repeated", r.Repeated, false
-	case *validate.FieldRules_Map:
-		ruleType, rule, wrapped = "map", r.Map, false
-	case *validate.FieldRules_Any:
-		ruleType, rule, wrapped = "any", r.Any, false
-	case *validate.FieldRules_Duration:
-		ruleType, rule, wrapped = "duration", r.Duration, false
-	case *validate.FieldRules_Timestamp:
-		ruleType, rule, wrapped = "timestamp", r.Timestamp, false
-	case nil:
-		if ft, ok := typ.(pgs.FieldType); ok && ft.IsRepeated() {
-			return "repeated", &validate.RepeatedRules{}, rules.Message, false
-		} else if ok && ft.IsMap() && ft.Element().IsEmbed() {
-			return "map", &validate.MapRules{}, rules.Message, false
-		} else if typ.IsEmbed() {
-			return "message", rules.GetMessage(), rules.GetMessage(), false
-		}
-		return "none", nil, nil, false
-	default:
-		ruleType, rule, wrapped = "error", nil, false
+	ruleContext, err := rulesContext(f)
+	if err != nil {
+		isValidate = false
+		msg = append(msg, err.Error())
+		return
 	}
 
-	return ruleType, rule, rules.Message, wrapped
+	fmt.Fprintln(os.Stderr, ruleContext.Typ)
+
+	// 校验类型
+	value_any, err := TypeConvertFuncMap[ruleContext.Typ](rawData[f.Name().String()])
+	if err != nil {
+		isValidate = false
+		msg = append(msg, err.Error())
+		return
+	}
+
+	// validate
+	switch ruleContext.Typ {
+	case "uint32", "fixed32":
+		rules := parseNumber[uint32](ruleContext.Rules)
+		return validateRules[uint32](value_any.(uint32), rules)
+	case "uint64", "fixed64":
+		rules := parseNumber[uint64](ruleContext.Rules)
+		return validateRules[uint64](value_any.(uint64), rules)
+	case "int32", "sint32", "sfixed32":
+		rules := parseNumber[int32](ruleContext.Rules)
+		return validateRules[int32](value_any.(int32), rules)
+	case "int64", "sint64", "sfixed64":
+		rules := parseNumber[int64](ruleContext.Rules)
+		return validateRules[int64](value_any.(int64), rules)
+	case "double":
+		rules := parseNumber[float64](ruleContext.Rules)
+		return validateRules[float64](value_any.(float64), rules)
+	case "float":
+		rules := parseNumber[float32](ruleContext.Rules)
+		return validateRules[float32](value_any.(float32), rules)
+	default:
+		isValidate = false
+		msg = append(msg, fmt.Sprintf("不支持类型 %s", ruleContext.Typ))
+	}
+
+	return
 }
 
 // 返回一堆验证函数
@@ -209,7 +171,7 @@ func parseNumber[T uint32 | uint64 | int32 | int64 | float32 | float64](numberRu
 }
 
 // 验证value是否满足规则，只要有任意一个规则不通过，则不通过
-func checkRules[T any](val T, rules []RuleFunc[T]) (check bool, msg []string) {
+func validateRules[T any](val T, rules []RuleFunc[T]) (check bool, msg []string) {
 	check = true
 	msg = []string{}
 	for _, rule := range rules {
@@ -266,4 +228,85 @@ func parseRule(name string, f pgs.Field) (out shared.RuleContext, err error) {
 	}
 	return
 
+}
+
+func rulesContext(f pgs.Field) (out shared.RuleContext, err error) {
+	out.Field = f
+
+	var rules validate.FieldRules
+	if _, err = f.Extension(validate.E_Rules, &rules); err != nil {
+		return
+	}
+
+	var wrapped bool
+	if out.Typ, out.Rules, out.MessageRules, wrapped = resolveRules(f.Type(), &rules); wrapped {
+		out.WrapperTyp = out.Typ
+		out.Typ = "wrapper"
+	}
+
+	if out.Typ == "error" {
+		err = fmt.Errorf("unknown rule type (%T)", rules.Type)
+	}
+
+	return
+}
+
+func resolveRules(typ interface{ IsEmbed() bool }, rules *validate.FieldRules) (ruleType string, rule proto.Message, messageRule *validate.MessageRules, wrapped bool) {
+	switch r := rules.GetType().(type) {
+	case *validate.FieldRules_Float:
+		ruleType, rule, wrapped = "float", r.Float, typ.IsEmbed()
+	case *validate.FieldRules_Double:
+		ruleType, rule, wrapped = "double", r.Double, typ.IsEmbed()
+	case *validate.FieldRules_Int32:
+		ruleType, rule, wrapped = "int32", r.Int32, typ.IsEmbed()
+	case *validate.FieldRules_Int64:
+		ruleType, rule, wrapped = "int64", r.Int64, typ.IsEmbed()
+	case *validate.FieldRules_Uint32:
+		ruleType, rule, wrapped = "uint32", r.Uint32, typ.IsEmbed()
+	case *validate.FieldRules_Uint64:
+		ruleType, rule, wrapped = "uint64", r.Uint64, typ.IsEmbed()
+	case *validate.FieldRules_Sint32:
+		ruleType, rule, wrapped = "sint32", r.Sint32, false
+	case *validate.FieldRules_Sint64:
+		ruleType, rule, wrapped = "sint64", r.Sint64, false
+	case *validate.FieldRules_Fixed32:
+		ruleType, rule, wrapped = "fixed32", r.Fixed32, false
+	case *validate.FieldRules_Fixed64:
+		ruleType, rule, wrapped = "fixed64", r.Fixed64, false
+	case *validate.FieldRules_Sfixed32:
+		ruleType, rule, wrapped = "sfixed32", r.Sfixed32, false
+	case *validate.FieldRules_Sfixed64:
+		ruleType, rule, wrapped = "sfixed64", r.Sfixed64, false
+	case *validate.FieldRules_Bool:
+		ruleType, rule, wrapped = "bool", r.Bool, typ.IsEmbed()
+	case *validate.FieldRules_String_:
+		ruleType, rule, wrapped = "string", r.String_, typ.IsEmbed()
+	case *validate.FieldRules_Bytes:
+		ruleType, rule, wrapped = "bytes", r.Bytes, typ.IsEmbed()
+	case *validate.FieldRules_Enum:
+		ruleType, rule, wrapped = "enum", r.Enum, false
+	case *validate.FieldRules_Repeated:
+		ruleType, rule, wrapped = "repeated", r.Repeated, false
+	case *validate.FieldRules_Map:
+		ruleType, rule, wrapped = "map", r.Map, false
+	case *validate.FieldRules_Any:
+		ruleType, rule, wrapped = "any", r.Any, false
+	case *validate.FieldRules_Duration:
+		ruleType, rule, wrapped = "duration", r.Duration, false
+	case *validate.FieldRules_Timestamp:
+		ruleType, rule, wrapped = "timestamp", r.Timestamp, false
+	case nil:
+		if ft, ok := typ.(pgs.FieldType); ok && ft.IsRepeated() {
+			return "repeated", &validate.RepeatedRules{}, rules.Message, false
+		} else if ok && ft.IsMap() && ft.Element().IsEmbed() {
+			return "map", &validate.MapRules{}, rules.Message, false
+		} else if typ.IsEmbed() {
+			return "message", rules.GetMessage(), rules.GetMessage(), false
+		}
+		return "none", nil, nil, false
+	default:
+		ruleType, rule, wrapped = "error", nil, false
+	}
+
+	return ruleType, rule, rules.Message, wrapped
 }

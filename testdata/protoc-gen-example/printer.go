@@ -110,20 +110,20 @@ func (v PrinterVisitor) VisitEnumValue(ev pgs.EnumValue) (pgs.Visitor, error) {
 }
 
 // 对数值proto的简单测试
-func readJsonSimple() map[string]interface{} {
-	jsonStr := `{"float_val": 12.3
-				, "double_val": 11.2
-				, "int32_val": 3
-				, "int64_val": 3
-				, "uint32_val": 3
-				, "uint64_val": 3
-				, "sint32_val": 3
-				, "sint64_val": 3
-				, "fixed32_val": 3
-				, "fixed64_val": 3
-				, "sfixed32_val": 3
-				, "sfixed64_val": 3}`
-	var result map[string]interface{}
+func readJsonSimple() map[string]string {
+	jsonStr := `{"float_val": "12.3"
+				, "double_val": "2"
+				, "int32_val": "3"
+				, "int64_val": "3"
+				, "uint32_val": "3"
+				, "uint64_val": "3"
+				, "sint32_val": "3"
+				, "sint64_val": "3"
+				, "fixed32_val": "3"
+				, "fixed64_val": "3"
+				, "sfixed32_val": "3"
+				, "sfixed64_val": "3"}`
+	var result map[string]string
 	err := json.Unmarshal([]byte(jsonStr), &result)
 	if err != nil {
 		fmt.Println("Error:", err)
